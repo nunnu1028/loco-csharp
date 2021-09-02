@@ -8,9 +8,10 @@ namespace KakaoLoco.Network.Packet
 {
     public class Packet
     {
-        private static readonly short default_statusCode = 0;
-        private static readonly byte default_BodyType = 0;
-        public static byte[] ToBSON(JObject value)
+        private readonly static short statusCode = 0;
+        private readonly static byte bodyType = 0;
+
+        private static byte[] ToBSON(JObject value)
         {
             using MemoryStream ms = new();
             using BsonWriter writer = new(ms);
@@ -18,7 +19,7 @@ namespace KakaoLoco.Network.Packet
             return ms.ToArray();
         }
 
-        public static JObject ToJSON(byte[] value)
+        private static JObject ToJSON(byte[] value)
         {
             using MemoryStream ms = new(value);
             using BsonReader reader = new(ms);
@@ -31,15 +32,15 @@ namespace KakaoLoco.Network.Packet
             byte[] bsonData = ToBSON(body);
             BytesBuffer bytesBuffer = new(22 + bsonData.Length);
 
-            bytesBuffer.PutInt(packetID, false);
-            bytesBuffer.PutShort(default_statusCode);
+            bytesBuffer.PutUInt((uint)packetID);
+            bytesBuffer.PutUShort((ushort)Packet.statusCode);
 
             byte[] methodBytes = Encoding.ASCII.GetBytes(method);
             bytesBuffer.PutBytes(methodBytes);
             bytesBuffer.AddOffset(11 - methodBytes.Length);
 
-            bytesBuffer.PutByte(default_BodyType);
-            bytesBuffer.PutInt(bsonData.Length, false);
+            bytesBuffer.PutByte(Packet.bodyType);
+            bytesBuffer.PutUInt((uint)bsonData.Length);
             bytesBuffer.PutBytes(bsonData);
 
             return bytesBuffer.bytes;
