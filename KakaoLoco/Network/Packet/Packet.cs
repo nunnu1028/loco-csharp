@@ -3,6 +3,7 @@ using Newtonsoft.Json.Bson;
 using System.IO;
 using KakaoLoco.Util;
 using System.Text;
+using Newtonsoft.Json;
 
 namespace KakaoLoco.Network.Packet
 {
@@ -14,17 +15,18 @@ namespace KakaoLoco.Network.Packet
         private static byte[] ToBSON(JObject value)
         {
             using MemoryStream ms = new();
-            using BsonWriter writer = new(ms);
-            value.WriteTo(writer);
+            using BsonDataWriter dataWriter = new(ms);
+            JsonSerializer serializer = new();
+            serializer.Serialize(dataWriter, value);
             return ms.ToArray();
         }
 
         private static JObject ToJSON(byte[] value)
         {
             using MemoryStream ms = new(value);
-            using BsonReader reader = new(ms);
-            JToken token = JToken.ReadFrom(reader);
-            return (JObject)token;
+            using BsonDataReader reader = new(ms);
+            JsonSerializer serializer = new();
+            return serializer.Deserialize<JObject>(reader);
         }
 
         public static byte[] ToLocoPacketRequest(int packetID, string method, JObject body)
