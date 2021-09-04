@@ -39,7 +39,6 @@ namespace KakaoLoco.Network
         public void Close()
         {
             this.listenTokenSource.Cancel();
-            this.socket.Close();
         }
 
         private void Listen()
@@ -54,7 +53,11 @@ namespace KakaoLoco.Network
             {
                 try
                 {
-                    if (token.IsCancellationRequested) break;
+                    if (token.IsCancellationRequested)
+                    {
+                        this.socket.Close();
+                        break;
+                    }
                     LocoPacketResponse? response = this.socket.Receive();
 
                     if (response != null)

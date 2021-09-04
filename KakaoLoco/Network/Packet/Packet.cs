@@ -1,9 +1,8 @@
 ﻿using Newtonsoft.Json.Linq;
-using Newtonsoft.Json.Bson;
-using System.IO;
+using Newtonsoft.Json;
 using KakaoLoco.Util;
 using System.Text;
-using Newtonsoft.Json;
+using MongoDB.Bson;
 
 namespace KakaoLoco.Network.Packet
 {
@@ -14,24 +13,20 @@ namespace KakaoLoco.Network.Packet
 
         private static byte[] ToBSON(JObject value)
         {
-            using MemoryStream ms = new();
-            using BsonDataWriter dataWriter = new(ms);
-            JsonSerializer serializer = new();
-            serializer.Serialize(dataWriter, value);
-            return ms.ToArray();
+            BsonDocument doc = BsonDocument.Parse(value.ToString(Formatting.None));
+            return doc.ToBson();
         }
 
         private static JObject ToJSON(byte[] value)
         {
-            using MemoryStream ms = new(value);
-            using BsonDataReader reader = new(ms);
-            JsonSerializer serializer = new();
-            return serializer.Deserialize<JObject>(reader);
+            RawBsonDocument doc = new(value);
+            return JObject.Parse(doc.ToJson());
         }
 
         public static byte[] ToLocoPacketRequest(int packetID, string method, JObject body)
         {
             byte[] bsonData = ToBSON(body);
+
             BytesBuffer bytesBuffer = new(22 + bsonData.Length);
 
             bytesBuffer.PutUInt((uint)packetID);

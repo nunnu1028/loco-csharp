@@ -1,9 +1,6 @@
 ﻿using KakaoLoco.Util;
-using Org.BouncyCastle.Asn1;
-using Org.BouncyCastle.Crypto;
-using Org.BouncyCastle.Crypto.Parameters;
-using Org.BouncyCastle.Security;
 using System;
+using System.IO;
 using System.Security.Cryptography;
 
 namespace KakaoLoco.Network.Secure
@@ -12,20 +9,34 @@ namespace KakaoLoco.Network.Secure
     {
         private readonly byte[] AESKey;
         private readonly RNGCryptoServiceProvider provider;
+        private readonly RijndaelManaged cryptor;
 
         public CryptoManager()
         {
             this.AESKey = new byte[16];
             this.provider = new();
             this.provider.GetBytes(this.AESKey);
+
+            cryptor = new RijndaelManaged()
+            {
+                BlockSize = 128,
+                KeySize = 128,
+                Mode = CipherMode.CFB,
+                Padding = PaddingMode.None
+            };
         }
 
         public byte[] AESEncrypt(byte[] bytes, byte[] iv)
         {
-            IBufferedCipher cipher = CipherUtilities.GetCipher("AES/CFB/NoPadding");
-            cipher.Init(true, new ParametersWithIV(ParameterUtilities.CreateKeyParameter("AES", this.AESKey), iv));
+            using ICryptoTransform transform = this.cryptor.CreateEncryptor(this.AESKey, iv);
+            using NoPaddingTransformWrapper cryptoTransform = new(transform);
+            using MemoryStream memoryStream = new();
+            using CryptoStream cryptoStream = new(memoryStream, cryptoTransform, CryptoStreamMode.Write);
 
-            return cipher.DoFinal(bytes);
+            cryptoStream.Write(bytes, 0, bytes.Length);
+            cryptoStream.FlushFinalBlock();
+
+            return memoryStream.ToArray();
         }
 
         public byte[] ToLocoSecurePacket(byte[] data)
@@ -34,7 +45,7 @@ namespace KakaoLoco.Network.Secure
             byte[] encryptedData = this.AESEncrypt(data, iv);
             BytesBuffer bytesBuffer = new(20 + encryptedData.Length);
 
-            bytesBuffer.PutUInt((uint)(encryptedData.Length + 16));
+            bytesBuffer.PutInt(encryptedData.Length + 16);
             bytesBuffer.PutBytes(iv);
             bytesBuffer.PutBytes(encryptedData);
 
@@ -43,10 +54,15 @@ namespace KakaoLoco.Network.Secure
 
         public byte[] AESDecrypt(byte[] bytes, byte[] iv)
         {
-            IBufferedCipher cipher = CipherUtilities.GetCipher("AES/CFB/NoPadding");
-            cipher.Init(false, new ParametersWithIV(ParameterUtilities.CreateKeyParameter("AES", this.AESKey), iv));
+            using ICryptoTransform transform = this.cryptor.CreateDecryptor(this.AESKey, iv);
+            using NoPaddingTransformWrapper cryptoTransform = new(transform);
+            using MemoryStream memoryStream = new();
+            using CryptoStream cryptoStream = new(memoryStream, cryptoTransform, CryptoStreamMode.Write);
 
-            return cipher.DoFinal(bytes);
+            cryptoStream.Write(bytes, 0, bytes.Length);
+            cryptoStream.FlushFinalBlock();
+
+            return memoryStream.ToArray();
         }
 
         public byte[] GetRandomCipherIV()
@@ -59,21 +75,10 @@ namespace KakaoLoco.Network.Secure
 
         public byte[] GetRSAEncryptedAESKey()
         {
-            Asn1Object obj = Asn1Object.FromByteArray(Convert.FromBase64String("MIIBIDANBgkqhkiG9w0BAQEFAAOCAQ0AMIIBCAKCAQEApElgRBx+g7sniYFW7LE8ivrwXShKTRFV8lXNItMXbN5QSC8vJ/cTSOTS619Xv5Zx7xXJIk4EKxtWesEGbgZpEUP2xQ+IeH9oz0JxayEMvvD1nVNAWgpWE4pociEoArsK7qY3YwXb1CiDHo9hojLv7djbo3cwXvlyMh4TUrX2RjCZPlVJxk/LVjzcl9ohJLkl3eoSrf0AE4kQ9mk3+raEhq5Dv+IDxKYX+fIytUWKmrQJusjtre9oVUX5sBOYZ0dzez/XapusEhUWImmB6mciVXfRXQ8IK4IH6vfNyxMSOTfLEhRYN2SMLzplAYFiMV536tLS3VmG5GJRdkpDubqPeQIBAw=="));
+            RSACryptoServiceProvider RSAProvider = new();
 
-            DerSequence publicKeySequence = (DerSequence)obj;
-
-            DerBitString encodedPublicKey = (DerBitString)publicKeySequence[1];
-            DerSequence publicKey = (DerSequence)Asn1Object.FromByteArray(encodedPublicKey.GetBytes());
-
-            DerInteger modulus = (DerInteger)publicKey[0];
-            DerInteger exponent = (DerInteger)publicKey[1];
-
-            RsaKeyParameters keyParameters = new(false, modulus.PositiveValue, exponent.PositiveValue);
-            IBufferedCipher cipher = CipherUtilities.GetCipher("RSA/ECB/OAEPWithSHA1AndMGF1Padding");
-            cipher.Init(true, keyParameters);
-            
-            return cipher.DoFinal(this.AESKey);
+            RSAProvider.FromXmlString(Config.locoXMLPublicKey);
+            return RSAProvider.Encrypt(this.AESKey, RSAEncryptionPadding.OaepSHA1);
         }
 
         public byte[] ToLocoHandshakePacket()
@@ -81,12 +86,73 @@ namespace KakaoLoco.Network.Secure
             byte[] encryptedData = this.GetRSAEncryptedAESKey();
             BytesBuffer bytesBuffer = new(12 + encryptedData.Length);
 
-            bytesBuffer.PutUInt((uint)encryptedData.Length);
-            bytesBuffer.PutUInt(12);
-            bytesBuffer.PutUInt(2);
+            bytesBuffer.PutInt(encryptedData.Length);
+            bytesBuffer.PutInt(12);
+            bytesBuffer.PutInt(2);
             bytesBuffer.PutBytes(encryptedData);
 
             return bytesBuffer.bytes;
+        }
+        public class NoPaddingTransformWrapper : ICryptoTransform
+        {
+
+            private ICryptoTransform m_Transform;
+
+            public NoPaddingTransformWrapper(ICryptoTransform symmetricAlgoTransform)
+            {
+                if (symmetricAlgoTransform == null)
+                    throw new ArgumentNullException(nameof(symmetricAlgoTransform));
+
+                this.m_Transform = symmetricAlgoTransform;
+            }
+
+            #region simple wrap
+
+            public bool CanReuseTransform
+            {
+                get { return this.m_Transform.CanReuseTransform; }
+            }
+
+            public bool CanTransformMultipleBlocks
+            {
+                get { return this.m_Transform.CanTransformMultipleBlocks; }
+            }
+
+            public int InputBlockSize
+            {
+                get { return this.m_Transform.InputBlockSize; }
+            }
+
+            public int OutputBlockSize
+            {
+                get { return this.m_Transform.OutputBlockSize; }
+            }
+
+            public int TransformBlock(byte[] inputBuffer, int inputOffset, int inputCount, byte[] outputBuffer, int outputOffset)
+            {
+                return this.m_Transform.TransformBlock(inputBuffer, inputOffset, inputCount, outputBuffer, outputOffset);
+            }
+
+            #endregion
+
+            public byte[] TransformFinalBlock(byte[] inputBuffer, int inputOffset, int inputCount)
+            {
+                if (inputCount % this.m_Transform.InputBlockSize == 0)
+                    return this.m_Transform.TransformFinalBlock(inputBuffer, inputOffset, inputCount);
+                else
+                {
+                    byte[] lastBlocks = new byte[inputCount / this.m_Transform.InputBlockSize + this.m_Transform.InputBlockSize];
+                    Buffer.BlockCopy(inputBuffer, inputOffset, lastBlocks, 0, inputCount);
+                    byte[] result = this.m_Transform.TransformFinalBlock(lastBlocks, 0, lastBlocks.Length);
+                    Array.Resize(ref result, inputCount);
+                    return result;
+                }
+            }
+
+            public void Dispose()
+            {
+                this.m_Transform.Dispose();
+            }
         }
     }
 }
