@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using KakaoLoco.Util;
 using System.Text;
 using MongoDB.Bson;
+using MongoDB.Bson.IO;
 
 namespace KakaoLoco.Network.Packet
 {
@@ -20,7 +21,7 @@ namespace KakaoLoco.Network.Packet
         private static JObject ToJSON(byte[] value)
         {
             RawBsonDocument doc = new(value);
-            return JObject.Parse(doc.ToJson());
+            return JObject.Parse(doc.ToJson(new JsonWriterSettings { OutputMode = JsonOutputMode.RelaxedExtendedJson }));
         }
 
         public static byte[] ToLocoPacketRequest(int packetID, string method, JObject body)
