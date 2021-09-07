@@ -13,7 +13,6 @@ namespace KakaoLoco.Network
         private readonly ILocoSocket socket;
         private readonly Dictionary<int, TaskCompletionSource<LocoPacketResponse>> packetDict;
         private int currentPacketID;
-        private Task listenTask;
         private CancellationTokenSource listenTokenSource;
 
         public LocoSession(ILocoSocket socket)
@@ -39,12 +38,13 @@ namespace KakaoLoco.Network
         public void Close()
         {
             this.listenTokenSource.Cancel();
+            this.socket.Close();
         }
 
         private void Listen()
         {
             this.listenTokenSource = new();
-            this.listenTask = Task.Factory.StartNew(() => this.ListenFunction(listenTokenSource.Token));
+            Task.Factory.StartNew(() => this.ListenFunction(listenTokenSource.Token));
         }
 
         private void ListenFunction(CancellationToken token)
@@ -54,14 +54,12 @@ namespace KakaoLoco.Network
                 try
                 {
                     if (token.IsCancellationRequested)
-                    {
-                        this.socket.Close();
                         break;
-                    }
                     LocoPacketResponse? response = this.socket.Receive();
 
                     if (response != null)
                     {
+                        Console.WriteLine(response.Value.body.ToString());
                         if (this.packetDict.TryGetValue(response.Value.packetID, out TaskCompletionSource<LocoPacketResponse> task))
                         {
                             task.SetResult(response.Value);
