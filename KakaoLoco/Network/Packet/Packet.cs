@@ -68,5 +68,21 @@ namespace KakaoLoco.Network.Packet
                 this.body = Packet.ToJSON(BytesBuffer.ReadBytes(packetBytes, 22, bodyLength));
             }
         }
+
+        public struct LocoRequestResponse<T>
+        {
+            public readonly int status;
+            public readonly bool success;
+            public readonly T result;
+            public readonly LocoPacketResponse response;
+
+            public LocoRequestResponse(LocoPacketResponse response, T result)
+            {
+                this.status = (int)response.body["status"];
+                this.success = this.status == 0;
+                this.result = result;
+                this.response = response;
+            }
+        }
     }
 }
