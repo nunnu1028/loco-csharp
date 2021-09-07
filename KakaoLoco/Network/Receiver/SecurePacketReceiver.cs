@@ -39,8 +39,8 @@ namespace KakaoLoco.Network.Receiver
 
                     LocoPacketResponse? response = this.receiver.Perform(packetBytes);
 
-                    if (this.currentBytes.Length > this.packetLength + 4)
-                        this.currentBytes = BytesBuffer.ReadBytes(this.currentBytes, this.packetLength + 4, this.currentBytes.Length - this.packetLength + 4);
+                    if (this.currentBytes.Length > (this.packetLength + 4))
+                        this.currentBytes = BytesBuffer.ReadBytes(this.currentBytes, this.packetLength + 4, this.currentBytes.Length - (this.packetLength + 4));
                     else
                         this.currentBytes = Array.Empty<byte>();
 
