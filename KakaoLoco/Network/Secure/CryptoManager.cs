@@ -7,12 +7,14 @@ namespace KakaoLoco.Network.Secure
 {
     public class CryptoManager
     {
+        private readonly Config config;
         private readonly byte[] AESKey;
         private readonly RNGCryptoServiceProvider provider;
         private readonly RijndaelManaged cryptor;
 
-        public CryptoManager()
+        public CryptoManager(Config config)
         {
+            this.config = config;
             this.AESKey = new byte[16];
             this.provider = new();
             this.provider.GetBytes(this.AESKey);
@@ -77,7 +79,7 @@ namespace KakaoLoco.Network.Secure
         {
             RSACryptoServiceProvider RSAProvider = new();
 
-            RSAProvider.FromXmlString(Config.locoXMLPublicKey);
+            RSAProvider.FromXmlString(config.locoXMLPublicKey);
             return RSAProvider.Encrypt(this.AESKey, RSAEncryptionPadding.OaepSHA1);
         }
 

@@ -14,12 +14,12 @@ namespace KakaoLoco.Network.Socket
         private readonly SecurePacketReceiver receiver;
         private bool handshaked;
 
-        public LocoSecureSocket(string host, int port)
+        public LocoSecureSocket(string host, int port, Config config)
         {
             this.client = new(host, port);
             this.stream = this.client.GetStream();
 
-            this.cryptoManager = new();
+            this.cryptoManager = new(config);
             this.receiver = new(this.cryptoManager);
             this.handshaked = false;
         }
