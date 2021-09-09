@@ -10,6 +10,7 @@ namespace KakaoLoco.Network
 {
     public class LocoSession
     {
+        public readonly Dictionary<string, Action<LocoPacketResponse>> handlerDict;
         private readonly ILocoSocket socket;
         private readonly Dictionary<int, TaskCompletionSource<LocoPacketResponse>> packetDict;
         private int currentPacketID;
@@ -17,6 +18,7 @@ namespace KakaoLoco.Network
 
         public LocoSession(ILocoSocket socket)
         {
+            this.handlerDict = new();
             this.socket = socket;
             this.packetDict = new();
             this.currentPacketID = -1;
@@ -59,16 +61,16 @@ namespace KakaoLoco.Network
 
                     if (response != null)
                     {
-                        Console.WriteLine(response.Value.body.ToString());
+                        if (this.handlerDict.TryGetValue(response.Value.method, out Action<LocoPacketResponse> value))
+                            value.Invoke(response.Value);
                         if (this.packetDict.TryGetValue(response.Value.packetID, out TaskCompletionSource<LocoPacketResponse> task))
-                        {
                             task.SetResult(response.Value);
-                        }
                     }
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine(e);
+                    if (e.Message != "Unable to read data from the transport connection: 현재 연결은 사용자의 호스트 시스템의 소프트웨어의 의해 중단되었습니다..")
+                        Console.WriteLine(e.Message);
                     this.Close();
                     break;
                 }
