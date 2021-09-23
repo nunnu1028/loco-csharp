@@ -61,7 +61,9 @@ namespace KakaoLoco.Network
 
                     if (response != null)
                     {
-                        if (this.handlerDict.TryGetValue(response.Value.method, out Action<LocoPacketResponse> value))
+                        if (this.handlerDict.TryGetValue("*", out Action<LocoPacketResponse> value))
+                            value.Invoke(response.Value);
+                        if (this.handlerDict.TryGetValue(response.Value.method, out Action<LocoPacketResponse> value2))
                             value.Invoke(response.Value);
                         if (this.packetDict.TryGetValue(response.Value.packetID, out TaskCompletionSource<LocoPacketResponse> task))
                             task.SetResult(response.Value);
