@@ -48,6 +48,7 @@ namespace KakaoLoco.Network.Socket
 
         public void Close()
         {
+            this.stream.Close();
             this.client.Close();
         }
     }
